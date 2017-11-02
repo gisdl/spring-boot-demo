@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ 参考资料：
+ http://logging.apache.org/log4j/2.x/manual/appenders.html
+ http://blog.csdn.net/chenhaotong/article/details/50411683
+ https://springframework.guru/tag/log4j/
+ 使用ymal：https://springframework.guru/log4j-2-configuration-using-yaml/
+-->
+<!--
+    Configuration后面的status，这个用于设置log4j2自身内部的信息输出，可以不设置，当设置成trace时，你会看到log4j2内部各种详细输出。可以设置成OFF(关闭)或Error(只输出错误信息)
+    status="OFF"
+    monitorInterval：Log4j能够自动检测修改配置 文件和重新配置本身，设置间隔秒数。
+    status="Error" monitorInterval="30″
+-->
+<!-- 使用<asyncLogger>或者<asyncRoot>的时候不要设置Log4jContextSelector -->
+<Configuration status="OFF">
+    <!--
+    日志文件目录和压缩文件目录配置
+    -->
+    <Properties>
+        <!-- 日志生成目录 -->
+        <property name="appLog.path" value="/iot/logs/cdrConsumer"/>
+        <!-- 话单目录 -->
+        <property name="cdr.path" value="/iot/API/CDR/cdr"/>
+
+    </Properties>
+    <Appenders>
+        <!-- 输出控制台日志的配置 -->
+        <Console name="console" target="SYSTEM_OUT">
+            <!--控制台只输出level及以上级别的信息（onMatch），其他的直接拒绝（onMismatch）-->
+            <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
+            <!-- 输出日志的格式 -->
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+        <!-- ==================API业务日志================== -->
+        <!-- 这个会打印出所有的信息，每次大小超过size，则这size大小的日志会自动存入按年份-月份建立的文件夹下面并进行压缩，作为存档-->
+        <APIAppender name="apiLogRolling" fileName="${appLog.path}.log"
+                     filePattern="${appLog.path}/$${date:yyyy-MM}/%d{yyyy-MM-dd-HH-mm-ss-SSS}.cdrConsumer.log.zip">
+            <PatternLayout pattern="%d{yyyy-MM-dd 'at' HH:mm:ss z} %-5level %class{36} %L %M - %msg%xEx%n"/>
+            <SizeBasedTriggeringPolicy size="300 MB"/>
+            <Filters>
+                <!-- 记录info及以上级别信息 -->
+                <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY" />
+            </Filters>
+            <!-- max则默认同一文件夹下7个文件，compressionLevel参数官网解释：Sets the compression level, 0-9, where 0 = none, 1 = best speed, through 9 = best compression. Only implemented for ZIP files,详见http://logging.apache.org/log4j/2.x/manual/appenders.html#RollingFileAppender-->
+            <DefaultRolloverStrategy fileIndex = "nomax"/>
+        </APIAppender>
+        <!-- ==================API异常日志================== -->
+        <APIAppender name="apiErrorLogRolling" fileName="${appLog.path}-error.log"
+                     filePattern="${appLog.path}/$${date:yyyy-MM}/%d{yyyy-MM-dd-HH-mm-ss-SSS}.cdrConsumer-error.log.zip">
+            <PatternLayout pattern="%d{yyyy-MM-dd 'at' HH:mm:ss z} %-5level %class{36} %L %M - %msg%xEx%n"/>
+            <SizeBasedTriggeringPolicy size="300 MB"/>
+            <Filters>
+                <!-- 只记录error级别信息 -->
+                <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY" />
+            </Filters>
+            <DefaultRolloverStrategy fileIndex = "nomax"/>
+        </APIAppender>
+        <!-- 话单-->
+        <!-- 异步Logger会在批量处理时自动冲刷，所以关闭immediateFlush -->
+        <APIAppender name="cdrRolling" fileName="${cdr.path}.log" immediateFlush="false"
+                     filePattern="${cdr.path}.%d{yyyy-MM-dd-HH-mm-ss-SSS}.detail">
+            <PatternLayout pattern="%msg%n" />
+            <Policies>
+                <!--每小时check 切分一次 整点切分 -->
+                <!--<TimeBasedTriggeringPolicy interval="5" modulate="true" />-->
+                <SizeBasedTriggeringPolicy size="10 KB"/>
+            </Policies>
+            <Filters>
+                <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY" />
+            </Filters>
+            <!--             指定每天的最大压缩包个数，默认7个，超过了会覆盖之前的 2.8版本开始才支持fileIndex为nomax参数，该参数为无上限值，根据pattern规则确定每天维度-->
+            <DefaultRolloverStrategy fileIndex = "nomax"/>
+
+        </APIAppender>
+
+        <!-- demo，打印出所有的信息，每次大小超过size，则这size大小的日志会自动存入按年份-月份建立的文件夹下面并进行压缩，作为存档 -->
+        <!-- <RollingRandomAccessFile name="apiLogRolling" fileName="${sysLog.path}.log" immediateFlush="false"
+                                  filePattern="${sysLog.path}.%d{yyyy-MM-dd}.%i.log.zip">
+             <PatternLayout pattern="%d{yyyy-MM-dd 'at' HH:mm:ss z} [%t] %-5level %logger{36} %L %M - %msg%xEx%n" />
+             <Policies>
+                 <TimeBasedTriggeringPolicy interval="6" modulate="true" />
+                 <SizeBasedTriggeringPolicy size="300 MB"/>
+             </Policies>
+             <Filters>
+                 &lt;!&ndash; 只记录info和warn级别信息 &ndash;&gt;
+                 &lt;!&ndash;<ThresholdFilter level="error" onMatch="DENY" onMismatch="NEUTRAL"/>&ndash;&gt;
+                 <ThresholdFilter level="trace" onMatch="ACCEPT" onMismatch="DENY" />
+                 <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY" />
+                 <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY" />
+                 <ThresholdFilter level="warn" onMatch="ACCEPT" onMismatch="DENY" />
+                 <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY"/>
+                 <ThresholdFilter level="fatal" onMatch="ACCEPT" onMismatch="DENY" />
+             </Filters>
+             &lt;!&ndash; 指定每天的最大压缩包个数，默认7个，超过了会覆盖之前的 &ndash;&gt;
+             <DefaultRolloverStrategy max="50"/>
+         </RollingRandomAccessFile>-->
+
+        <!-- demo,文件会打印出所有信息，这个log每次运行程序会自动清空，由append属性决定，这个也挺有用的，适合临时测试用-->
+        <!--<File name="fileTest" fileName="${testLog}/fileTest.log" append="false">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %class{36} %L %M - %msg%xEx%n"/>
+        </File>-->
+
+    </Appenders>
+
+    <!-- 混合模式：异步、非异步 -->
+    <Loggers>
+        <Logger name="cn.iot.api" level="info" additivity="false">
+        </Logger>
+        <Logger name="cdrLogger" level="info" additivity="false">
+            <AppenderRef ref="cdrRolling"/>
+        </Logger>
+        <!-- AsyncRoot - 异步记录日志 - 需要LMAX Disruptor的支持  -->
+        <AsyncRoot level="info" additivity="false">
+            <AppenderRef ref="console"/>
+            <AppenderRef ref="apiLogRolling"/>
+            <AppenderRef ref="apiErrorLogRolling"/>
+        </AsyncRoot>
+
+    </Loggers>
+</Configuration>
